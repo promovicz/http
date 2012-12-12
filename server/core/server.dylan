@@ -96,6 +96,11 @@ define open class <http-server> (<multi-logger-mixin>, <abstract-router>)
     init-keyword: media-type-map:;
 
 
+  //// Stuff here is for connection thread pooling
+  slot server-connection-pool :: <thread-pool> = make(<fixed-thread-pool>,
+                                                      name: "koala connection",
+                                                      size: 10);
+
   //// Next 3 slots are for sessions
 
   // Maps session-id to session object.
@@ -335,9 +340,6 @@ define class <client> (<object>)
   constant slot client-socket :: <tcp-socket>,
     required-init-keyword: socket:;
 
-  constant slot client-thread :: <thread>,
-    required-init-keyword: thread:;
-
 end class <client>;
 
 
@@ -500,10 +502,10 @@ define function join-clients
                 end;
   for (client in clients)
     close(client.client-socket, abort?: #t);
-    log-info("Waiting for shut down of %s...", client);
-    join-thread(client.client-thread);
-    log-info("Client %s shut down", client);
   end;
+  log-info("Waiting for connection shutdown...");
+  thread-pool-shutdown(server.server-connection-pool);
+  log-info("All connections shut down");
 end function join-clients;
 
 define function start-http-listener
@@ -614,15 +616,11 @@ define function do-http-listen
         block()
           wrapping-inc!(listener.connections-accepted);
           wrapping-inc!(server.connections-accepted);
-          let thread = make(<thread>,
-                            name: format-to-string("HTTP Responder %d",
-                                                   server.connections-accepted),
-                            function: do-respond);
+          thread-pool-request(server.server-connection-pool, do-respond);
           client := make(<client>,
                          server: server,
                          listener: listener,
-                         socket: socket,
-                         thread: thread);
+                         socket: socket);
           add!(server.server-clients, client);
         exception (ex :: <thread-error>)
           log-error("Thread error while making responder thread: %=", ex)

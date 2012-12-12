@@ -26,6 +26,7 @@ define library koala
   use uncommon-dylan;
   use uri;
   use xml-parser;
+  use queue;
 
   export koala-unit;
   export koala;
@@ -233,6 +234,7 @@ define module httpi                             // http internals
   use streams-internals;
   use strings;
   use threads;               // from dylan lib
+  use threads-extensions;
   use uncommon-dylan;
   use uri;
   use xml-parser,
